@@ -752,7 +752,7 @@ function showDone(completion, comparison) {
 /* ======================= assistant ======================= */
 /* The page talks to SiliconFlow only through the Cloudflare Worker in worker/, which holds the API key
    and pins the model. Leave WORKER_URL empty to run the local keyword script instead. */
-const WORKER_URL = "";
+const WORKER_URL = "https://backpack-shop-proxy.oscarxie147.workers.dev";
 const AGENT = { mode: "script", model: null };
 const RULES = `你是「山野装备」网店里的购物助手，正在帮一位顾客挑背包。全店共 24 款，只能通过工具查看。
 硬性规则：
