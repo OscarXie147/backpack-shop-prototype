@@ -1,0 +1,1040 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>背包导购原型</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: experiment flow (intro → shop → checkout → Gu grid → survey → done). Shop = store header, then either
+   chat-first (A) or store grid + assistant sidebar (B). Researcher drawer floats bottom-right. */
+:root {
+  --bg: #f4f5f3;
+  --surface: #ffffff;
+  --sunk: #eceee9;
+  --fg: #1c211e;
+  --muted: #626b65;
+  --line: #d9ddd6;
+  --brand: #24563f;
+  --brand-fg: #ffffff;
+  --brand-soft: #e2eee7;
+  --price: #c2410c;
+  --pick: #a16207;
+  --pick-soft: #fbf0d9;
+  --danger: #b42318;
+  --font-body: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-num: "Barlow Condensed", "Arial Narrow", "Noto Sans SC", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111513; --surface: #1a1f1c; --sunk: #232925; --fg: #e5ebe7; --muted: #9aa69f; --line: #323b36;
+    --brand: #74c39b; --brand-fg: #0c1912; --brand-soft: #22382c; --price: #fb923c; --pick: #f2b544; --pick-soft: #3a2e15;
+    --danger: #f97066; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111513; --surface: #1a1f1c; --sunk: #232925; --fg: #e5ebe7; --muted: #9aa69f; --line: #323b36;
+  --brand: #74c39b; --brand-fg: #0c1912; --brand-soft: #22382c; --price: #fb923c; --pick: #f2b544; --pick-soft: #3a2e15;
+  --danger: #f97066; color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+img { max-width: 100%; }
+html { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 14px; line-height: 1.6; }
+button { font: inherit; cursor: pointer; color: inherit; }
+input, textarea { font: inherit; color: inherit; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, .card:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+h1, h2, h3 { text-wrap: balance; }
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 7px 14px; }
+.btn:hover { border-color: var(--brand); }
+.btn-primary { border: 0; background: var(--brand); color: var(--brand-fg); border-radius: 8px; padding: 9px 18px; font-weight: 500; }
+.btn-primary:disabled { opacity: .45; cursor: default; }
+.btn-pick { border: 0; background: var(--price); color: #fff; border-radius: 8px; padding: 9px 18px; font-weight: 500; }
+.linkbtn { border: 0; background: none; color: var(--brand); padding: 0; text-decoration: underline; text-underline-offset: 3px; }
+
+.view { min-height: 100%; }
+.view[hidden] { display: none !important; }
+.wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+/* ---------- intro / text pages ---------- */
+.page { padding-block: 48px 64px; display: flex; justify-content: center; }
+.sheet { width: 100%; max-width: 640px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 32px; display: flex; flex-direction: column; gap: 18px; }
+.eyebrow { font-size: 12px; letter-spacing: .12em; color: var(--muted); }
+.sheet h1 { margin: 0; font-size: 26px; line-height: 1.3; }
+.sheet p { margin: 0; }
+.scenario { background: var(--brand-soft); border-radius: 10px; padding: 16px 18px; }
+.steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.fine { font-size: 12.5px; color: var(--muted); }
+
+/* ---------- store header ---------- */
+.storebar { background: var(--surface); border-bottom: 1px solid var(--line); position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; }
+.storebar .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding-block: 10px; }
+.logo { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 17px; white-space: nowrap; }
+.logo svg { width: 28px; height: 28px; }
+.search { flex: 1; min-width: 200px; display: flex; border: 2px solid var(--brand); border-radius: 999px; overflow: hidden; background: var(--surface); }
+.search input { flex: 1; min-width: 0; border: 0; padding: 7px 14px; background: transparent; outline: none; }
+.search button { border: 0; background: var(--brand); color: var(--brand-fg); padding: 0 18px; }
+.search[hidden] { display: none; }
+.cartbtn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 14px; }
+.cartbtn .badge { background: var(--price); color: #fff; border-radius: 999px; font-size: 12px; min-width: 20px; padding: 0 6px; text-align: center; }
+
+/* ---------- shop layouts ---------- */
+.shop { padding-block: 16px 24px; display: grid; gap: 16px; }
+.shop.layout-b { grid-template-columns: minmax(0, 1fr) 380px; align-items: start; }
+.shop.layout-a { grid-template-columns: minmax(0, 860px); justify-content: center; }
+.store[hidden] { display: none; }
+.store { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+.tab { border: 0; background: transparent; border-radius: 6px; padding: 4px 10px; color: var(--muted); }
+.tab[aria-pressed="true"] { background: var(--brand-soft); color: var(--brand); font-weight: 500; }
+.sort { display: flex; align-items: center; gap: 6px; color: var(--muted); margin-left: auto; }
+.sort select { border: 1px solid var(--line); background: var(--surface); color: var(--fg); border-radius: 6px; padding: 3px 6px; font: inherit; }
+.resultline { color: var(--muted); font-size: 13px; display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
+.grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.pager { display: flex; justify-content: center; align-items: center; gap: 12px; color: var(--muted); }
+.pager button:disabled { opacity: .4; cursor: default; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 0; display: flex; flex-direction: column; text-align: left; overflow: hidden; position: relative; }
+.card:hover { border-color: var(--brand); box-shadow: 0 4px 14px rgba(0,0,0,.06); }
+.card .img { aspect-ratio: 1 / 1; max-width: 100%; background: var(--sunk); display: grid; place-items: center; }
+.card .img svg { width: 78%; height: auto; }
+.card .body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 5px; }
+.card .title { font-size: 13.5px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2.8em; }
+.card .tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.tag { font-size: 11.5px; color: var(--muted); background: var(--sunk); border-radius: 4px; padding: 0 6px; }
+.card .price { color: var(--price); font-family: var(--font-num); font-weight: 700; font-size: 21px; line-height: 1.1; }
+.card .price small { font-size: 13px; margin-right: 1px; }
+.card .seller { font-size: 12px; color: var(--muted); }
+.card.in-cart { border-color: var(--price); }
+.card .incart { position: absolute; top: 8px; left: 8px; background: var(--price); color: #fff; font-size: 11.5px; border-radius: 4px; padding: 1px 7px; }
+
+/* ---------- assistant ---------- */
+.assistant { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; display: flex; flex-direction: column; min-height: 0; }
+.shop.layout-b .assistant { position: sticky; top: calc(64px + env(safe-area-inset-top, 0px)); height: calc(100vh - 96px); }
+.shop.layout-a .assistant { height: calc(100vh - 110px); min-height: 520px; }
+.as-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.as-head .av { width: 30px; height: 30px; border-radius: 50%; background: var(--brand); color: var(--brand-fg); display: grid; place-items: center; font-weight: 700; font-size: 13px; }
+.as-head b { font-weight: 500; }
+.mode { margin-left: auto; font-size: 11.5px; border-radius: 999px; padding: 1px 8px; background: var(--sunk); color: var(--muted); white-space: nowrap; }
+.mode.live { background: var(--brand-soft); color: var(--brand); }
+.msgs { flex: 1; min-height: 0; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+.msg { display: flex; flex-direction: column; gap: 8px; max-width: 100%; }
+.msg.user { align-items: flex-end; }
+.bubble { padding: 9px 13px; border-radius: 12px; max-width: 92%; white-space: pre-wrap; overflow-wrap: anywhere; }
+.msg.agent .bubble { background: var(--sunk); border-top-left-radius: 4px; }
+.msg.user .bubble { background: var(--brand); color: var(--brand-fg); border-top-right-radius: 4px; }
+.bubble.thinking { color: var(--muted); }
+.toolnote { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.toolnote::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--brand); }
+.composer { border-top: 1px solid var(--line); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 2px 10px; font-size: 12.5px; }
+.chip:hover { border-color: var(--brand); }
+.inputrow { display: flex; gap: 8px; }
+.inputrow input { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; background: var(--bg); }
+.stopbtn[hidden] { display: none; }
+
+.carousel-wrap { display: flex; align-items: center; gap: 6px; max-width: 100%; }
+.carousel { display: grid; grid-auto-flow: column; grid-auto-columns: 150px; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; min-width: 0; flex: 1; }
+.carousel .card { scroll-snap-align: start; }
+.carousel .card .title { font-size: 12.5px; }
+.carousel .card .price { font-size: 18px; }
+.navbtn { border: 1px solid var(--line); background: var(--surface); border-radius: 50%; width: 28px; height: 28px; flex: none; }
+
+.cmp-scroll { overflow-x: auto; max-width: 100%; }
+table.cmp { border-collapse: collapse; font-size: 13px; background: var(--surface); }
+.modal table.cmp { width: 100%; }
+table.cmp th, table.cmp td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; vertical-align: top; }
+table.cmp thead th { font-weight: 500; }
+table.cmp th[scope="row"] { color: var(--muted); font-weight: 400; }
+
+/* ---------- compare dock ---------- */
+.dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 8; background: var(--surface); border-top: 1px solid var(--line); box-shadow: 0 -6px 18px rgba(0,0,0,.06);
+  padding-bottom: env(safe-area-inset-bottom, 0px); }
+.dock[hidden] { display: none; }
+.dock .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-block: 10px; }
+.dock .slot { display: flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 8px; padding: 3px 8px 3px 3px; font-size: 12.5px; max-width: 220px; }
+.dock .slot svg { width: 30px; height: 30px; background: var(--sunk); border-radius: 6px; flex: none; }
+.dock .slot span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dock .slot button { border: 0; background: none; color: var(--muted); padding: 0 2px; }
+
+/* ---------- modal / detail ---------- */
+.overlay { position: fixed; inset: 0; z-index: 20; background: rgba(10, 14, 12, .45); display: flex; align-items: center; justify-content: center;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.overlay[hidden] { display: none; }
+.modal { background: var(--surface); border-radius: 14px; width: 100%; max-width: 920px; max-height: 100%; overflow-y: auto; position: relative; }
+.modal .close { position: absolute; top: 10px; right: 10px; border: 0; background: var(--sunk); border-radius: 50%; width: 32px; height: 32px; }
+.detail { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; padding: 24px; }
+.gallery { display: flex; flex-direction: column; gap: 10px; }
+.gallery .main { aspect-ratio: 1 / 1; max-width: 100%; background: var(--sunk); border-radius: 10px; display: grid; place-items: center; }
+.gallery .main svg { width: 74%; }
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; color: var(--muted); font-size: 13px; }
+.swatch { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--line); padding: 0; }
+.swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--brand); }
+.info { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.info h2 { margin: 0; font-size: 19px; line-height: 1.4; padding-right: 28px; }
+.info .pricebox { background: var(--pick-soft); border-radius: 8px; padding: 10px 14px; display: flex; align-items: baseline; gap: 10px; }
+.info .pricebox .p { color: var(--price); font-family: var(--font-num); font-weight: 700; font-size: 32px; line-height: 1; }
+.specs { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; font-size: 13.5px; }
+.specs dt { color: var(--muted); }
+.specs dd { margin: 0; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
+.checkout { padding: 24px; display: flex; flex-direction: column; gap: 16px; max-width: 560px; }
+.checkout h2 { margin: 0; font-size: 20px; }
+.order { display: flex; gap: 14px; align-items: center; border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+.order svg { width: 84px; height: 84px; background: var(--sunk); border-radius: 8px; flex: none; }
+
+/* ---------- Gu grid ---------- */
+.gugrid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.gucell { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 6px; display: flex; flex-direction: column; gap: 4px; position: relative; font-size: 11.5px; }
+.gucell svg { width: 100%; height: auto; background: var(--sunk); border-radius: 6px; }
+.gucell .lbl { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-align: center; border-radius: 4px; padding: 1px 0; }
+.gucell .lbl.sel { background: var(--pick); color: var(--surface); }
+.gucell .lbl.not { background: var(--sunk); color: var(--muted); }
+.gucell.not { opacity: .6; }
+.gucell.sel { border-color: var(--pick); box-shadow: 0 0 0 2px var(--pick-soft); }
+
+/* ---------- survey ---------- */
+.q { display: flex; flex-direction: column; gap: 8px; padding-block: 12px; border-bottom: 1px solid var(--line); }
+.q p { margin: 0; }
+.scale { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.scale label { display: flex; flex-direction: column; align-items: center; gap: 2px; font-family: var(--font-num); font-size: 15px; border: 1px solid var(--line); border-radius: 6px; padding: 4px 0; cursor: pointer; }
+.scale input { margin: 0; }
+.scale label:has(input:checked) { border-color: var(--brand); background: var(--brand-soft); }
+.anchors { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+.sheet textarea { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; background: var(--bg); min-height: 80px; }
+
+/* ---------- researcher ---------- */
+.rfab { position: fixed; z-index: 30; left: max(16px, env(safe-area-inset-left, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  border: 0; border-radius: 999px; background: var(--fg); color: var(--bg); padding: 8px 14px; font-size: 13px; box-shadow: 0 6px 18px rgba(0,0,0,.2); }
+body.has-dock .shop { padding-bottom: 88px; }
+body.has-dock .shop.layout-b .assistant { height: calc(100vh - 172px); }
+body.has-dock .shop.layout-a .assistant { height: calc(100vh - 186px); }
+body.has-dock .rfab { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+.rpanel { position: fixed; z-index: 29; top: 0; right: 0; bottom: 0; width: min(460px, 100%); background: var(--surface); border-left: 1px solid var(--line);
+  display: flex; flex-direction: column; box-shadow: -12px 0 30px rgba(0,0,0,.12);
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) 0; }
+.rpanel[hidden] { display: none; }
+.rhead { padding: 14px 16px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
+.rhead h2 { margin: 0; font-size: 15px; }
+.rrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: transparent; color: var(--muted); padding: 4px 10px; }
+.seg button[aria-pressed="true"] { background: var(--brand); color: var(--brand-fg); }
+.rlog { flex: 1; overflow: auto; padding: 8px 16px 72px; font-family: var(--font-mono); font-size: 11.5px; min-height: 0; }
+.ev { display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 2px 8px; padding: 4px 0; border-bottom: 1px dashed var(--line); }
+.ev .t { color: var(--muted); font-variant-numeric: tabular-nums; }
+.ev .k { color: var(--brand); font-weight: 500; }
+.ev .p { grid-column: 2; color: var(--fg); overflow-wrap: anywhere; }
+pre.dump { background: var(--sunk); border-radius: 8px; padding: 12px; font-family: var(--font-mono); font-size: 11.5px; max-height: 360px; overflow: auto; margin: 0; }
+
+@media (max-width: 1100px) { .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 900px) {
+  .shop.layout-b { grid-template-columns: minmax(0, 1fr); }
+  .shop.layout-b .assistant, .shop.layout-a .assistant { position: static; height: 70vh; }
+  .detail { grid-template-columns: minmax(0, 1fr); }
+  .gugrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sheet { padding: 20px; }
+  .gugrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (prefers-reduced-motion: no-preference) { .carousel, .msgs { scroll-behavior: smooth; } }
+</style>
+</head>
+<body>
+
+<!-- ===== intro ===== -->
+<section class="view" id="v-intro">
+  <div class="wrap page">
+    <div class="sheet">
+      <span class="eyebrow">购物任务 · 约 10 分钟</span>
+      <h1>为你的下一次出行挑一个背包</h1>
+      <div class="scenario">
+        下个月你要去云南走一段 3 天的徒步线路。回来以后，你也打算每天背它通勤上班，里面要放一台 14 英寸笔记本。请在「山野装备」网店的 24 款背包里挑一款。
+      </div>
+      <ol class="steps">
+        <li>在网店里浏览商品，可以随时问右边（或页面中间）的购物助手。</li>
+        <li>选定一款后点「选这款」，再去结算确认。</li>
+        <li>确认后回答 9 道简短问题。</li>
+      </ol>
+      <p class="fine">正式实验里，会从参与者中抽签，按所选款式真的寄出背包。原型不兑现。</p>
+      <div><button class="btn-primary" id="btn-start">开始购物</button></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== shop ===== -->
+<section class="view" id="v-shop" hidden>
+  <header class="storebar">
+    <div class="wrap">
+      <div class="logo"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M3 26 L12 10 L17 18 L21 13 L29 26 Z" fill="var(--brand)"/></svg>山野装备 · 背包馆</div>
+      <form class="search" id="search-form" role="search">
+        <input id="search-input" placeholder="搜索背包，例如：防水、通勤、30L" autocomplete="off">
+        <button type="submit">搜索</button>
+      </form>
+      <button class="cartbtn" id="btn-cart">购物车 <span class="badge num" id="cart-n">0</span></button>
+    </div>
+  </header>
+
+  <div class="wrap shop layout-b" id="shop">
+    <div class="store" id="store">
+      <div class="toolbar">
+        <div class="tabs" id="tabs"></div>
+        <label class="sort">排序
+          <select id="sort">
+            <option value="default">综合</option>
+            <option value="price-asc">价格从低到高</option>
+            <option value="price-desc">价格从高到低</option>
+            <option value="weight-asc">重量从轻到重</option>
+            <option value="cap-desc">容量从大到小</option>
+          </select>
+        </label>
+      </div>
+      <div class="resultline" id="resultline"></div>
+      <div class="grid" id="grid"></div>
+      <div class="pager"><button class="btn" id="btn-prev">上一页</button><span id="page-label" class="num"></span><button class="btn" id="btn-next">下一页</button></div>
+    </div>
+
+    <section class="assistant" aria-label="购物助手">
+      <div class="as-head">
+        <span class="av">助</span><b>购物助手</b>
+        <span class="mode" id="mode">连接中…</span>
+      </div>
+      <div class="msgs" id="msgs" aria-live="polite"></div>
+      <div class="composer">
+        <div class="chips" id="chips"></div>
+        <form class="inputrow" id="chat-form">
+          <input id="chat-input" autocomplete="off" placeholder="问问助手，例如：要能放电脑、500 元以内">
+          <button class="btn-primary" type="submit" id="btn-send">发送</button>
+          <button class="btn stopbtn" type="button" id="btn-stop" hidden>停止</button>
+        </form>
+      </div>
+    </section>
+  </div>
+</section>
+
+<!-- ===== Gu grid ===== -->
+<section class="view" id="v-gu" hidden>
+  <div class="wrap page">
+    <div class="sheet" style="max-width: 900px;">
+      <span class="eyebrow">购买完成</span>
+      <h1 id="gu-title">你选好了</h1>
+      <p class="fine" id="gu-note">下面是本店全部 24 款背包。</p>
+      <div class="gugrid" id="gugrid"></div>
+      <div><button class="btn-primary" id="btn-to-survey">继续，回答问题</button></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== survey ===== -->
+<section class="view" id="v-survey" hidden>
+  <div class="wrap page">
+    <form class="sheet" id="survey-form">
+      <span class="eyebrow">最后一步 · 9 道题</span>
+      <h1>关于你刚才的选择</h1>
+      <p class="fine">每题从 1 到 7 选一个数字：1 表示完全没有，7 表示完全如此。</p>
+      <div id="questions"></div>
+      <label class="q" for="reason"><p>用一两句话说说你为什么选了这款。</p><textarea id="reason"></textarea></label>
+      <p class="fine" id="survey-msg"></p>
+      <div><button class="btn-primary" type="submit">提交</button></div>
+    </form>
+  </div>
+</section>
+
+<!-- ===== done ===== -->
+<section class="view" id="v-done" hidden>
+  <div class="wrap page">
+    <div class="sheet" style="max-width: 820px;">
+      <span class="eyebrow">实验结束</span>
+      <h1>谢谢参与</h1>
+      <p>以下是研究者能拿到的这一场会话的全部记录。正式实验里参与者看不到这一页。</p>
+      <div class="rrow" id="done-summary"></div>
+      <pre class="dump" id="done-dump"></pre>
+      <div class="rrow"><button class="btn" id="btn-copy-done">复制 JSON</button><button class="btn-primary" id="btn-again">再来一次</button></div>
+    </div>
+  </div>
+</section>
+
+<!-- compare dock -->
+<div class="dock" id="dock" hidden>
+  <div class="wrap">
+    <b>对比栏</b><span class="fine">最多 4 款</span>
+    <div id="dock-slots" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+    <span style="flex:1"></span>
+    <button class="btn" id="btn-dock-clear">清空</button>
+    <button class="btn-primary" id="btn-dock-open">开始对比</button>
+  </div>
+</div>
+
+<!-- overlay: detail / compare / checkout -->
+<div class="overlay" id="overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <button class="close" id="btn-modal-close" aria-label="关闭">✕</button>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<!-- researcher -->
+<button class="rfab" id="btn-rpanel">研究者面板</button>
+<aside class="rpanel" id="rpanel" hidden aria-label="研究者面板">
+  <div class="rhead">
+    <div class="rrow"><h2>研究者面板</h2><span style="flex:1"></span><button class="btn" id="btn-rpanel-close">关闭</button></div>
+    <div class="rrow">布局条件
+      <div class="seg" role="group" aria-label="布局条件">
+        <button id="btn-layout-a" aria-pressed="false">A 助手为主</button>
+        <button id="btn-layout-b" aria-pressed="true">B 网店＋助手侧栏</button>
+      </div>
+    </div>
+    <div class="rrow"><label><input type="checkbox" id="chk-gu" checked> 购后显示 SELECTED / NOT SELECTED 标签（Gu 2018 操纵）</label></div>
+    <div class="rrow"><span>助手：</span><span id="r-mode">—</span></div>
+    <div class="rrow"><span class="num" id="r-count">0 条事件</span><span style="flex:1"></span><button class="btn" id="btn-copy">复制 JSON</button><button class="btn" id="btn-restart">从头开始</button></div>
+    <p class="fine" style="margin:0">原型说明：24 款为占位假数据，未按占优结构构造；量表为 Gu 2013 英文原文换成背包，中文为暂译，未经回译。参与者看不到此面板。</p>
+  </div>
+  <div class="rlog" id="rlog"></div>
+</aside>
+
+<script>
+/* ======================= catalog (placeholder data) ======================= */
+const WATER = ["无防水", "面料泼水", "附防雨罩", "卷口防水"];
+const SHAPES = { day: "日行轻量", hike: "徒步", commute: "通勤", roll: "卷口" };
+const C = (id, brand, series, shape, cap, wt, fabric, water, laptop, back, hip, pockets, price, colors, desc) =>
+  ({ id, brand, series, shape, cap, wt, fabric, water, laptop, back, hip, pockets, price, colors, desc,
+     name: `${brand} ${series} ${cap}L ${SHAPES[shape]}双肩包` });
+const CATALOG = [
+  C("P01","岭行","Daypack","day",18,0.42,"30D 硅尼龙",1,0,"贴背海绵",false,3,299,["#2f6f5e","#c9a227","#2b2f33"],"可收纳成拳头大小，适合当主包里的冲顶包。"),
+  C("P02","岭行","Venture","hike",28,0.95,"X-Pac VX21",2,16,"透气网架",true,5,799,["#3d5a80","#6b705c"],"网架背负离背透气，带可拆腰带，顶部有快取袋。"),
+  C("P03","岭行","Hybrid","hike",30,1.18,"500D 科杜拉",2,16,"悬浮背板",true,7,749,["#4a4e69","#9a031e"],"前开 U 型拉链，隔层多，背负可调节背长。"),
+  C("P04","岭行","Metro","commute",22,0.86,"420D 涤纶",1,14,"贴背海绵",false,6,429,["#222222","#8d99ae"],"侧开电脑仓，背面防盗口袋，外形简洁。"),
+  C("P05","岭行","Roll","roll",25,0.92,"TPU 涂层布",3,16,"贴背海绵",false,3,569,["#e07a5f","#3d405b"],"卷口加热封压胶，雨天可直接淋，内袋可放电脑。"),
+  C("P06","岭行","Trek","hike",35,1.36,"210D 尼龙",2,0,"悬浮背板",true,6,699,["#606c38","#283618"],"多日徒步容量，腰带带口袋，侧面可挂登山杖。"),
+  C("P07","野径","Light","day",20,0.48,"30D 硅尼龙",1,0,"贴背海绵",false,3,329,["#00a6a6","#f4d35e"],"极简结构，肩带有水壶袋，重量很轻。"),
+  C("P08","野径","Urban","commute",26,0.98,"420D 涤纶",1,16,"贴背海绵",false,6,459,["#1d3557","#a8dadc"],"大开口书包式，独立电脑仓带悬浮底。"),
+  C("P09","野径","Roll-top","roll",25,0.90,"TPU 涂层布",3,0,"贴背海绵",false,3,549,["#f77f00","#003049"],"全防水卷口，无内部分隔，适合骑行通勤。"),
+  C("P10","野径","Trail","hike",28,1.05,"210D 尼龙",2,14,"透气网架",true,5,589,["#588157","#3a5a40"],"网架背负，侧袋弹力网，底部防雨罩。"),
+  C("P11","野径","Commute","commute",24,1.10,"500D 科杜拉",1,16,"贴背海绵",false,7,699,["#343a40","#6c757d"],"耐磨面料，内部收纳格多，可挂行李箱。"),
+  C("P12","野径","Summit","hike",32,1.22,"420D 涤纶",2,0,"透气网架",true,6,639,["#bc4749","#386641"],"顶包可拆，侧压缩带，适合两三天线路。"),
+  C("P13","山脊","Ridge","commute",28,1.02,"210D 尼龙",1,16,"透气网架",false,5,529,["#5e548e","#231942"],"通勤包加网架背负，夏天不闷背。"),
+  C("P14","山脊","Trail","hike",30,1.05,"210D 尼龙",2,0,"透气网架",true,5,629,["#e76f51","#264653"],"经典徒步结构，腰带承重，冰爪挂点。"),
+  C("P15","山脊","Summit","hike",35,1.32,"420D 涤纶",2,0,"悬浮背板",true,6,689,["#2a9d8f","#e9c46a"],"大容量多日包，背长可调，带睡袋仓。"),
+  C("P16","山脊","Swift","day",22,0.62,"100D 尼龙",1,14,"贴背海绵",false,4,369,["#ff006e","#3a86ff"],"轻量日包，前置弹力袋可塞外套。"),
+  C("P17","山脊","Dry","roll",28,1.08,"TPU 涂层布",3,16,"透气网架",true,4,659,["#ffbe0b","#1b263b"],"卷口防水加网架背负，带可拆腰带。"),
+  C("P18","山脊","City","commute",20,0.78,"420D 涤纶",0,14,"贴背海绵",false,5,299,["#495057","#adb5bd"],"小巧通勤款，放得下 14 英寸电脑。"),
+  C("P19","云径","Tour","hike",32,1.25,"420D 涤纶",1,16,"透气网架",true,6,579,["#118ab2","#073b4c"],"兼顾出行和通勤，前开大口，有电脑仓。"),
+  C("P20","云径","Metro","commute",22,0.88,"420D 涤纶",0,16,"贴背海绵",false,6,369,["#2b2d42","#ef233c"],"16 英寸电脑仓，USB 外接口，城市通勤。"),
+  C("P21","云径","Air","hike",26,0.84,"100D 尼龙",2,14,"悬浮背板",true,5,659,["#90be6d","#43aa8b"],"轻量悬浮背板，腰带细窄，适合快走。"),
+  C("P22","云径","Office","commute",25,1.00,"600D 涤纶",1,16,"贴背海绵",false,8,499,["#3c3c3c","#b08968"],"商务外观，内部收纳格最多，可挂行李箱。"),
+  C("P23","云径","Storm","roll",30,1.15,"TPU 涂层布",3,16,"透气网架",true,4,729,["#d00000","#370617"],"卷口防水，大容量，网架背负。"),
+  C("P24","云径","Mini","day",16,0.38,"30D 硅尼龙",1,0,"贴背海绵",false,2,259,["#80ed99","#22577a"],"最轻的一款，只装随身小物。"),
+];
+const byId = Object.fromEntries(CATALOG.map(p => [p.id, p]));
+
+/* ======================= Gu 2013 items (English original, chocolate → backpack) ======================= */
+/* Chinese lines are a working translation, not back-translated. */
+const ITEMS = [
+  ["To what extent do you feel you have reached closure about your choice of which backpack to buy?",
+   "你在多大程度上觉得，自己对“买哪款背包”这个选择已经有了了结？"],
+  ["To what extent are you still thinking about your decision of which backpack to buy?",  // reverse-scored
+   "你在多大程度上仍在想着“买哪款背包”这个决定？"],
+  ["After choosing your backpack, to what extent did you perceive that decision as settled?",
+   "选好背包之后，你在多大程度上觉得这个决定已经定下来了？"],
+  ["People sometimes use expressions such as \"I have turned my back on\" or \"I have closed the door on\" something. To what extent do you think such expressions describe how you feel about your decision of which backpack to buy?",
+   "人们有时会用“我已经转身不再看它了”或“我已经把这扇门关上了”这样的说法。你觉得这类说法在多大程度上符合你对“买哪款背包”这个决定的感受？"],
+  ["After choosing your backpack, to what extent did you perceive that decision as \"unfinished business\"?",  // reverse-scored
+   "选好背包之后，你在多大程度上觉得这个决定是一件“还没了结的事”？"],
+  ["After choosing your backpack, to what extent did you perceive that decision as a \"closed book\"?",
+   "选好背包之后，你在多大程度上觉得这个决定已经“翻篇了”？"],
+  ["After choosing your backpack, to what extent did you think of that decision as behind you?",
+   "选好背包之后，你在多大程度上觉得这个决定已经过去了？"],
+  ["While you were looking at the backpack you chose, to what extent did you keep thinking about the other backpacks in the store?",
+   "在看你选中的那款背包时，你在多大程度上还一直想着店里的其他背包？"],
+  ["While you were looking at the backpack you chose, to what extent did you try to compare it with other backpacks in the store?",
+   "在看你选中的那款背包时，你在多大程度上试着把它和店里的其他背包作比较？"],
+];
+
+/* ======================= product art ======================= */
+function bag(p, color, size) {
+  const c = color || p.colors[0];
+  const dark = shade(c, -28), light = shade(c, 26);
+  const s = size ? ` width="${size}" height="${size}"` : "";
+  const strap = `<path d="M38 30 C30 50 30 92 36 118" stroke="${dark}" stroke-width="7" fill="none" stroke-linecap="round"/><path d="M82 30 C90 50 90 92 84 118" stroke="${dark}" stroke-width="7" fill="none" stroke-linecap="round"/>`;
+  const handle = `<path d="M50 24 C50 12 70 12 70 24" stroke="${dark}" stroke-width="4" fill="none"/>`;
+  const hip = p.hip ? `<rect x="22" y="116" width="76" height="10" rx="5" fill="${dark}"/>` : "";
+  let body = "";
+  if (p.shape === "roll") {
+    body = `<path d="M30 22 h60 v8 h-60z" fill="${dark}"/><rect x="28" y="18" width="64" height="9" rx="4" fill="${shade(c,-40)}"/>
+      <path d="M30 30 h60 q4 0 4 6 v80 q0 10 -10 10 h-48 q-10 0 -10 -10 v-80 q0 -6 4 -6z" fill="${c}"/>
+      <rect x="40" y="64" width="40" height="34" rx="6" fill="${dark}" opacity=".35"/><path d="M60 18 v12" stroke="${light}" stroke-width="3"/>`;
+  } else if (p.shape === "hike") {
+    body = `<path d="M34 26 q26 -16 52 0 v94 q0 8 -8 8 h-36 q-8 0 -8 -8z" fill="${c}"/>
+      <path d="M34 26 q26 -16 52 0 v16 q-26 10 -52 0z" fill="${dark}"/>
+      <rect x="42" y="62" width="36" height="40" rx="8" fill="${light}" opacity=".55"/><path d="M42 82 h36" stroke="${dark}" stroke-width="2"/>
+      <path d="M30 56 l-6 50 M90 56 l6 50" stroke="${light}" stroke-width="3"/>`;
+  } else if (p.shape === "commute") {
+    body = `<rect x="28" y="22" width="64" height="104" rx="12" fill="${c}"/>
+      <path d="M34 34 q26 -10 52 0" stroke="${light}" stroke-width="3" fill="none"/>
+      <rect x="38" y="72" width="44" height="38" rx="6" fill="${dark}" opacity=".45"/><path d="M42 78 h36" stroke="${light}" stroke-width="2"/>`;
+  } else {
+    body = `<path d="M32 40 q0 -22 28 -22 q28 0 28 22 v76 q0 10 -10 10 h-36 q-10 0 -10 -10z" fill="${c}"/>
+      <path d="M38 48 q22 -14 44 0" stroke="${light}" stroke-width="3" fill="none"/>
+      <path d="M40 80 h40 v26 q0 6 -6 6 h-28 q-6 0 -6 -6z" fill="${dark}" opacity=".4"/>`;
+  }
+  return `<svg viewBox="0 0 120 140"${s} aria-hidden="true">${handle}${strap}${hip}${body}
+    <rect x="52" y="${p.shape === "roll" ? 40 : 52}" width="16" height="8" rx="2" fill="${light}"/></svg>`;
+}
+function shade(hex, amt) {
+  const n = parseInt(hex.slice(1), 16);
+  const ch = v => Math.max(0, Math.min(255, v + amt));
+  return "#" + [ch(n >> 16), ch((n >> 8) & 255), ch(n & 255)].map(v => v.toString(16).padStart(2, "0")).join("");
+}
+
+/* ======================= state & log ======================= */
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+let S;
+const CONFIG = { layout: "b", gu: true };
+
+function fresh() {
+  return { t0: performance.now(), events: [], view: "intro", cart: null, compare: [], tab: "all", sort: "default", query: "", page: 0,
+    detail: null, detailT: 0, turns: [], busy: false, ctl: null, survey: {}, seen: new Set() };
+}
+function log(type, payload = {}) {
+  const ev = { t: Math.round((performance.now() - S.t0) / 10) / 100, type, ...payload };
+  S.events.push(ev);
+  const row = document.createElement("div");
+  row.className = "ev";
+  row.innerHTML = `<span class="t"></span><span class="k"></span><span class="p"></span>`;
+  row.children[0].textContent = ev.t.toFixed(2) + "s";
+  row.children[1].textContent = type;
+  row.children[2].textContent = Object.keys(payload).length ? JSON.stringify(payload) : "";
+  $("rlog").prepend(row);
+  $("r-count").textContent = S.events.length + " 条事件";
+}
+function recentUi() {
+  const skip = new Set(["chat_user", "chat_agent", "agent_tool", "agent_error"]);
+  return S.events.filter(e => !skip.has(e.type)).slice(-8).map(e => {
+    const { t, type, ...rest } = e;
+    return `${t}s ${type} ${JSON.stringify(rest)}`;
+  }).join("\n");
+}
+
+/* ======================= views ======================= */
+function show(view) {
+  for (const v of ["intro", "shop", "gu", "survey", "done"]) $("v-" + v).hidden = v !== view;
+  S.view = view;
+  renderDock();
+  log("view", { to: view });
+  window.scrollTo(0, 0);
+}
+
+/* ======================= store ======================= */
+const TABS = [["all", "全部"], ["hike", "徒步"], ["commute", "通勤"], ["day", "日行轻量"], ["roll", "卷口防水"]];
+const PAGE = 12;
+function storeItems() {
+  let items = CATALOG.filter(p => S.tab === "all" || p.shape === S.tab);
+  if (S.query) {
+    const q = S.query.toLowerCase();
+    const n = q.match(/(\d{2})\s*l/);
+    items = items.filter(p => {
+      const hay = `${p.name} ${p.fabric} ${WATER[p.water]} ${p.back} ${p.desc} ${p.laptop ? "电脑 笔记本" : ""} ${p.hip ? "腰带" : ""}`.toLowerCase();
+      if (n) return p.cap === +n[1];
+      return q.split(/\s+/).every(w => /防水|防雨/.test(w) ? p.water >= 2 : hay.includes(w));
+    });
+  }
+  const sorters = { "price-asc": (a, b) => a.price - b.price, "price-desc": (a, b) => b.price - a.price,
+    "weight-asc": (a, b) => a.wt - b.wt, "cap-desc": (a, b) => b.cap - a.cap };
+  if (sorters[S.sort]) items = [...items].sort(sorters[S.sort]);
+  return items;
+}
+function cardEl(p, where) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "card" + (S.cart === p.id ? " in-cart" : "");
+  b.dataset.id = p.id;
+  b.innerHTML = `<div class="img">${bag(p)}</div><div class="body">
+    <span class="title">${esc(p.name)}</span>
+    <span class="tags"><span class="tag">${p.cap}L</span><span class="tag">${p.wt.toFixed(2)}kg</span><span class="tag">${WATER[p.water]}</span>${p.laptop ? `<span class="tag">${p.laptop}寸电脑仓</span>` : ""}</span>
+    <span class="price"><small>¥</small>${p.price}</span><span class="seller">${esc(p.brand)}官方旗舰店</span></div>
+    ${S.cart === p.id ? `<span class="incart">已选</span>` : ""}`;
+  b.addEventListener("click", () => openDetail(p.id, where));
+  return b;
+}
+function renderStore() {
+  const items = storeItems();
+  const pages = Math.max(1, Math.ceil(items.length / PAGE));
+  if (S.page >= pages) S.page = pages - 1;
+  $("grid").replaceChildren(...items.slice(S.page * PAGE, S.page * PAGE + PAGE).map(p => cardEl(p, "store_grid")));
+  $("page-label").textContent = `${S.page + 1} / ${pages}`;
+  $("btn-prev").disabled = S.page === 0;
+  $("btn-next").disabled = S.page >= pages - 1;
+  const rl = $("resultline");
+  rl.replaceChildren();
+  const span = document.createElement("span");
+  span.textContent = S.query ? `“${S.query}”的搜索结果：${items.length} 款` : `共 ${items.length} 款`;
+  rl.append(span);
+  if (S.query) {
+    const clr = document.createElement("button");
+    clr.className = "linkbtn"; clr.type = "button"; clr.textContent = "清除搜索";
+    clr.onclick = () => { log("store_search_clear", { was: S.query }); S.query = ""; $("search-input").value = ""; S.page = 0; renderStore(); };
+    rl.append(clr);
+  }
+  $("tabs").replaceChildren(...TABS.map(([k, label]) => {
+    const t = document.createElement("button");
+    t.type = "button"; t.className = "tab"; t.textContent = label; t.setAttribute("aria-pressed", String(S.tab === k));
+    t.onclick = () => { S.tab = k; S.page = 0; log("store_tab", { tab: k }); renderStore(); };
+    return t;
+  }));
+}
+function refreshCards() {
+  if (CONFIG.layout === "b") renderStore();
+  document.querySelectorAll(".carousel .card").forEach(el => {
+    const p = byId[el.dataset.id];
+    el.replaceWith(cardEl(p, "chat_carousel"));
+  });
+}
+
+/* ======================= detail / compare / checkout modals ======================= */
+function openModal(html) { $("modal-body").innerHTML = html; $("overlay").hidden = false; $("btn-modal-close").focus(); }
+function closeModal() {
+  if (S.detail) { log("detail_close", { id: S.detail, dwell_ms: Math.round(performance.now() - S.detailT) }); S.detail = null; }
+  $("overlay").hidden = true;
+}
+function specRows(p) {
+  return [["容量", p.cap + " L"], ["重量", p.wt.toFixed(2) + " kg"], ["面料", p.fabric], ["防水", WATER[p.water]],
+    ["电脑仓", p.laptop ? p.laptop + " 英寸" : "无"], ["背负", p.back], ["腰带", p.hip ? "有" : "无"], ["收纳隔层", p.pockets + " 个"], ["品牌", p.brand]];
+}
+function openDetail(id, from) {
+  if (S.detail) closeModal();
+  const p = byId[id];
+  S.detail = id; S.detailT = performance.now(); S.seen.add(id);
+  const inCmp = S.compare.includes(id);
+  openModal(`<div class="detail">
+    <div class="gallery"><div class="main" id="d-main">${bag(p)}</div>
+      <div class="swatches">颜色 ${p.colors.map((c, i) => `<button class="swatch" data-c="${c}" aria-label="颜色 ${i + 1}" aria-pressed="${i === 0}" style="background:${c}"></button>`).join("")}</div></div>
+    <div class="info">
+      <span class="fine">${esc(p.brand)}官方旗舰店 · 商品编号 ${p.id}</span>
+      <h2 id="modal-title">${esc(p.name)}</h2>
+      <div class="pricebox"><span class="fine">售价</span><span class="p">¥${p.price}</span></div>
+      <p style="margin:0">${esc(p.desc)}</p>
+      <dl class="specs">${specRows(p).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
+      <div class="actions">
+        <button class="btn" id="d-cmp">${inCmp ? "移出对比" : "加入对比"}</button>
+        <button class="btn-pick" id="d-pick">${S.cart === id ? "已选这款" : "选这款"}</button>
+      </div>
+      <p class="fine" style="margin:0">本任务只能选一款。再选别的款会替换掉之前的选择。</p>
+    </div></div>`);
+  log("detail_open", { id, from });
+  $("modal-body").querySelectorAll(".swatch").forEach(sw => sw.onclick = () => {
+    $("modal-body").querySelectorAll(".swatch").forEach(x => x.setAttribute("aria-pressed", "false"));
+    sw.setAttribute("aria-pressed", "true");
+    $("d-main").innerHTML = bag(p, sw.dataset.c);
+    log("detail_color", { id, color: sw.dataset.c });
+  });
+  $("d-cmp").onclick = () => { toggleCompare(id, "detail"); $("d-cmp").textContent = S.compare.includes(id) ? "移出对比" : "加入对比"; };
+  $("d-pick").onclick = () => { pick(id, "detail"); $("d-pick").textContent = "已选这款"; };
+}
+function toggleCompare(id, from) {
+  if (S.compare.includes(id)) { S.compare = S.compare.filter(x => x !== id); log("compare_remove", { id, from }); }
+  else {
+    if (S.compare.length >= 4) { const out = S.compare.shift(); log("compare_remove", { id: out, from: "overflow" }); }
+    S.compare.push(id); log("compare_add", { id, from });
+  }
+  renderDock();
+}
+function renderDock() {
+  $("dock").hidden = S.view !== "shop" || S.compare.length === 0;
+  document.body.classList.toggle("has-dock", !$("dock").hidden);
+  $("dock-slots").replaceChildren(...S.compare.map(id => {
+    const p = byId[id];
+    const d = document.createElement("div");
+    d.className = "slot";
+    d.innerHTML = `${bag(p)}<span>${esc(p.brand + " " + p.series)}</span><button type="button" aria-label="移出">✕</button>`;
+    d.querySelector("button").onclick = () => toggleCompare(id, "dock");
+    return d;
+  }));
+}
+function compareTable(ids) {
+  const rows = [["价格", p => "¥" + p.price], ...specRows(byId[ids[0]]).map(([k], i) => [k, p => specRows(p)[i][1]])];
+  return `<div class="cmp-scroll"><table class="cmp"><thead><tr><th></th>${ids.map(id => `<th>${esc(byId[id].brand + " " + byId[id].series)}<br><span class="fine">${id}</span></th>`).join("")}</tr></thead>
+    <tbody>${rows.map(([k, f]) => `<tr><th scope="row">${k}</th>${ids.map(id => `<td>${esc(f(byId[id]))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+}
+function openCompare() {
+  if (S.compare.length < 2) return;
+  log("compare_open", { ids: [...S.compare] });
+  openModal(`<div class="checkout" style="max-width:none"><h2 id="modal-title">商品对比</h2>${compareTable(S.compare)}
+    <div class="actions">${S.compare.map(id => `<button class="btn" data-open="${id}">看 ${esc(byId[id].brand + " " + byId[id].series)} 详情</button>`).join("")}</div></div>`);
+  $("modal-body").querySelectorAll("[data-open]").forEach(b => b.onclick = () => openDetail(b.dataset.open, "compare_table"));
+}
+function pick(id, from) {
+  const prev = S.cart;
+  if (prev === id) return;
+  S.cart = id;
+  log(prev ? "cart_replace" : "cart_add", { id, from, ...(prev ? { replaced: prev } : {}) });
+  $("cart-n").textContent = "1";
+  refreshCards();
+}
+function openCart() {
+  log("cart_open", { id: S.cart });
+  if (!S.cart) {
+    openModal(`<div class="checkout"><h2 id="modal-title">购物车</h2><p>购物车是空的。点开任意商品，选「选这款」。</p></div>`);
+    return;
+  }
+  const p = byId[S.cart];
+  openModal(`<div class="checkout"><h2 id="modal-title">确认你的选择</h2>
+    <div class="order">${bag(p)}<div><div>${esc(p.name)}</div><div class="fine">${p.cap}L · ${p.wt.toFixed(2)}kg · ${WATER[p.water]}</div>
+      <div style="color:var(--price); font-family:var(--font-num); font-weight:700; font-size:22px;">¥${p.price}</div></div></div>
+    <p class="fine" style="margin:0">提交后不能再改。正式实验中，若你被抽中，会收到这一款。</p>
+    <div class="actions"><button class="btn" id="c-remove">移出购物车</button><button class="btn" id="c-back">再看看</button><button class="btn-pick" id="c-buy">确认购买</button></div></div>`);
+  $("c-remove").onclick = () => { log("cart_remove", { id: S.cart }); S.cart = null; $("cart-n").textContent = "0"; refreshCards(); closeModal(); };
+  $("c-back").onclick = () => { log("checkout_back", { id: S.cart }); closeModal(); };
+  $("c-buy").onclick = () => { log("purchase_confirm", { id: S.cart, seen: [...S.seen], compared: [...S.compare] }); closeModal(); if (S.ctl) S.ctl.abort(); showGu(); };
+}
+
+/* ======================= Gu grid, survey, done ======================= */
+function showGu() {
+  const p = byId[S.cart];
+  $("gu-title").textContent = `你选了 ${p.brand} ${p.series} ${p.cap}L`;
+  $("gu-note").textContent = CONFIG.gu ? "下面是本店全部 24 款背包，你选中的一款已标出。" : "下面是本店全部 24 款背包。";
+  $("gugrid").replaceChildren(...CATALOG.map(q => {
+    const d = document.createElement("div");
+    const sel = q.id === S.cart;
+    d.className = "gucell" + (CONFIG.gu ? (sel ? " sel" : " not") : "");
+    d.innerHTML = `${bag(q)}<span>${esc(q.brand + " " + q.series)}</span>${CONFIG.gu ? `<span class="lbl ${sel ? "sel" : "not"}">${sel ? "SELECTED" : "NOT SELECTED"}</span>` : ""}`;
+    return d;
+  }));
+  show("gu");
+  log("gu_grid_shown", { labels: CONFIG.gu });
+}
+function renderSurvey() {
+  $("questions").replaceChildren(...ITEMS.map(([en, zh], i) => {
+    const q = document.createElement("fieldset");
+    q.className = "q"; q.style.border = "0"; q.style.margin = "0";
+    q.innerHTML = `<legend style="padding:0"><span class="num" style="color:var(--muted)">${i + 1}.</span> ${esc(en)}
+        <span style="display:block; color:var(--muted); margin-top:2px">${esc(zh)}</span></legend>
+      <div class="scale">${[1,2,3,4,5,6,7].map(v => `<label><input type="radio" name="q${i + 1}" id="q${i + 1}-${v}" value="${v}">${v}</label>`).join("")}</div>
+      <div class="anchors"><span>1 not at all 完全没有</span><span>7 completely 完全如此</span></div>`;
+    q.addEventListener("change", e => { S.survey["q" + (i + 1)] = +e.target.value; log("survey_answer", { item: i + 1, value: +e.target.value }); });
+    return q;
+  }));
+}
+function submitSurvey(e) {
+  e.preventDefault();
+  const missing = ITEMS.map((_, i) => i + 1).filter(n => !S.survey["q" + n]);
+  if (missing.length) { $("survey-msg").textContent = `还有第 ${missing.join("、")} 题没有作答。`; $("survey-msg").style.color = "var(--danger)"; return; }
+  const r = x => 8 - x;
+  const sv = S.survey;
+  const completion = (sv.q1 + r(sv.q2) + sv.q3 + sv.q4 + r(sv.q5) + sv.q6 + sv.q7) / 7;
+  const comparison = (sv.q8 + sv.q9) / 2;
+  log("survey_submit", { answers: { ...sv }, reason: $("reason").value.trim(), decision_completion: +completion.toFixed(2), comparison_engagement: +comparison.toFixed(2) });
+  showDone(completion, comparison);
+}
+function showDone(completion, comparison) {
+  show("done");
+  const counts = {};
+  S.events.forEach(e => counts[e.type] = (counts[e.type] || 0) + 1);
+  const chat = S.events.filter(e => e.type === "chat_user").length;
+  const pills = [["所选", S.cart], ["用时", S.events[S.events.length - 1].t.toFixed(0) + " 秒"], ["对话轮数", chat],
+    ["看过详情", S.seen.size + " 款"], ["决策完成感（7 题均值）", completion.toFixed(2)], ["比较卷入（2 题均值）", comparison.toFixed(2)]];
+  $("done-summary").replaceChildren(...pills.map(([k, v]) => { const s = document.createElement("span"); s.className = "tag"; s.style.fontSize = "13px"; s.textContent = `${k}：${v}`; return s; }));
+  $("done-dump").textContent = JSON.stringify({ condition: { ...CONFIG, agent: AGENT.mode }, events: S.events }, null, 2);
+}
+
+/* ======================= assistant ======================= */
+/* The page talks to SiliconFlow only through the Cloudflare Worker in worker/, which holds the API key
+   and pins the model. Leave WORKER_URL empty to run the local keyword script instead. */
+const WORKER_URL = "";
+const AGENT = { mode: "script", model: null };
+const RULES = `你是「山野装备」网店里的购物助手，正在帮一位顾客挑背包。全店共 24 款，只能通过工具查看。
+硬性规则：
+1. 只依据顾客亲口说出的条件检索和筛选（预算、容量、重量、防水、电脑仓、用途等）。顾客没说的条件，不要替他加。
+2. 不评价哪一款"更好""最值""性价比最高"，也不提评分、销量、口碑（本店不提供这些信息）。顾客问"哪个好"时，说明几款各自的取舍，再问他最看重什么。
+3. 不要替顾客收起或排除任何商品，除非是他自己说的条件排除的。
+4. 不催促下单。顾客明确要选某款时，告诉他点开商品后按「选这款」，再去购物车结算。
+5. 要让顾客看商品时，调用 show_products 把卡片展示出来；要并排比较时调用 compare_products。不要在文字里罗列长长的参数表。
+6. 用中文回答，口语，简短，每次不超过 120 字。
+每条顾客消息前面附有「界面动态」，是他刚在页面上做过的操作，供你参考，不要逐条复述。`;
+const TOOLS = () => [
+  { name: "search_products",
+    description: "按顾客说出的条件检索本店背包，返回符合的商品摘要列表（固定顺序，不含任何质量评价）。所有参数都可选，只填顾客说过的。",
+    inputSchema: { type: "object", properties: {
+      max_price: { type: "number", description: "价格上限（元）" }, min_capacity: { type: "number", description: "最小容量（升）" },
+      max_capacity: { type: "number", description: "最大容量（升）" }, max_weight: { type: "number", description: "最大重量（千克）" },
+      waterproof: { type: "boolean", description: "顾客要求防雨/防水时为 true（附防雨罩或卷口防水）" },
+      min_laptop: { type: "number", description: "需要放下的电脑尺寸（英寸）" }, hip_belt: { type: "boolean", description: "顾客要求有腰带时为 true" },
+      style: { type: "string", enum: ["hike", "commute", "day", "roll"], description: "顾客指定的款式类别" } } },
+    execute: input => toolSearch(input) },
+  { name: "get_product", description: "取一款商品的完整参数和描述。", inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+    execute: ({ id }) => { const p = byId[String(id).toUpperCase()]; if (!p) throw new Error("没有这个商品编号"); logTool("get_product", { id: p.id }); return brief(p, true); } },
+  { name: "show_products", description: "在对话里给顾客展示商品卡片（最多 8 款）。顾客可以点卡片看详情。",
+    inputSchema: { type: "object", properties: { ids: { type: "array", items: { type: "string" } } }, required: ["ids"] },
+    execute: ({ ids }) => toolShow(ids) },
+  { name: "compare_products", description: "在对话里显示 2–4 款商品的并排参数对比表。",
+    inputSchema: { type: "object", properties: { ids: { type: "array", items: { type: "string" } } }, required: ["ids"] },
+    execute: ({ ids }) => toolCompare(ids) },
+];
+function brief(p, full) {
+  const b = { id: p.id, name: p.name, price: p.price, capacity_L: p.cap, weight_kg: p.wt, waterproof: WATER[p.water], laptop_inch: p.laptop || 0, back: p.back, hip_belt: p.hip, style: SHAPES[p.shape] };
+  return full ? { ...b, fabric: p.fabric, pockets: p.pockets, description: p.desc } : b;
+}
+let CUR = null; // current agent message attachment area
+function logTool(name, payload) { log("agent_tool", { tool: name, ...payload }); if (CUR) { const n = document.createElement("div"); n.className = "toolnote"; n.textContent = TOOLNAMES[name] || name; CUR.before.append(n); } }
+const TOOLNAMES = { search_products: "检索了商品目录", get_product: "查看了商品参数", show_products: "展示了商品", compare_products: "生成了对比表" };
+function toolSearch(c) {
+  const out = CATALOG.filter(p =>
+    (c.max_price == null || p.price <= +c.max_price) && (c.min_capacity == null || p.cap >= +c.min_capacity) &&
+    (c.max_capacity == null || p.cap <= +c.max_capacity) && (c.max_weight == null || p.wt <= +c.max_weight) &&
+    (!c.waterproof || p.water >= 2) && (c.min_laptop == null || +c.min_laptop === 0 || p.laptop >= +c.min_laptop) &&
+    (!c.hip_belt || p.hip) && (!c.style || p.shape === c.style));
+  logTool("search_products", { constraints: c, n: out.length });
+  return { count: out.length, products: out.map(p => brief(p)) };
+}
+function toolShow(ids) {
+  const list = [...new Set((Array.isArray(ids) ? ids : []).map(x => String(x).toUpperCase()))].filter(id => byId[id]).slice(0, 8);
+  if (!list.length) throw new Error("没有可展示的有效商品编号");
+  logTool("show_products", { ids: list });
+  if (CUR) CUR.after.append(carousel(list.map(id => byId[id])));
+  return `已展示 ${list.length} 款：${list.join("、")}`;
+}
+function toolCompare(ids) {
+  const list = [...new Set((Array.isArray(ids) ? ids : []).map(x => String(x).toUpperCase()))].filter(id => byId[id]).slice(0, 4);
+  if (list.length < 2) throw new Error("至少要两款有效商品编号");
+  logTool("compare_products", { ids: list });
+  if (CUR) { const d = document.createElement("div"); d.innerHTML = compareTable(list); CUR.after.append(d); }
+  return list.map(id => brief(byId[id], true));
+}
+function carousel(items) {
+  const wrap = document.createElement("div");
+  wrap.className = "carousel-wrap";
+  const track = document.createElement("div");
+  track.className = "carousel";
+  items.forEach(p => track.append(cardEl(p, "chat_carousel")));
+  const mk = (txt, dir, label) => { const b = document.createElement("button"); b.type = "button"; b.className = "navbtn"; b.textContent = txt; b.setAttribute("aria-label", label);
+    b.onclick = () => { track.scrollBy({ left: dir * 316 }); log("carousel_nav", { dir: dir > 0 ? "next" : "prev" }); }; return b; };
+  let timer;
+  track.addEventListener("scroll", () => { clearTimeout(timer); timer = setTimeout(() => {
+    const i = Math.round(track.scrollLeft / 158); log("carousel_scroll", { first_visible: items[i] ? items[i].id : null, of: items.length }); }, 300); });
+  wrap.append(mk("‹", -1, "向左"), track, mk("›", 1, "向右"));
+  return wrap;
+}
+function newAgentMsg() {
+  const m = document.createElement("div");
+  m.className = "msg agent";
+  const before = document.createElement("div");
+  before.style.display = "flex"; before.style.flexDirection = "column"; before.style.gap = "2px";
+  const bubble = document.createElement("div");
+  bubble.className = "bubble thinking";
+  bubble.textContent = "正在思考…";
+  const after = document.createElement("div");
+  after.style.display = "flex"; after.style.flexDirection = "column"; after.style.gap = "8px";
+  m.append(before, bubble, after);
+  $("msgs").append(m);
+  scrollChat();
+  return { before, bubble, after };
+}
+function addUserMsg(text) {
+  const m = document.createElement("div");
+  m.className = "msg user";
+  const b = document.createElement("div");
+  b.className = "bubble"; b.textContent = text;
+  m.append(b);
+  $("msgs").append(m);
+  scrollChat();
+}
+function scrollChat() { const m = $("msgs"); requestAnimationFrame(() => m.scrollTop = m.scrollHeight); }
+function setBusy(b) { S.busy = b; $("btn-send").disabled = b; $("btn-stop").hidden = !b; }
+
+async function send(text) {
+  if (S.busy || !text.trim()) return;
+  addUserMsg(text);
+  log("chat_user", { text });
+  CUR = newAgentMsg();
+  setBusy(true);
+  try {
+    const reply = AGENT.mode === "llm" ? await askLLM(text) : scriptReply(text);
+    CUR.bubble.classList.remove("thinking");
+    CUR.bubble.textContent = reply;
+    log("chat_agent", { text: reply, mode: AGENT.mode, model: AGENT.model });
+  } catch (e) {
+    CUR.bubble.classList.remove("thinking");
+    if (e && e.name === "AbortError") { CUR.bubble.textContent = "（已停止）"; log("agent_error", { code: "cancelled" }); }
+    else {
+      CUR.bubble.textContent = e && e.code === "rate_limited" ? "请求太频繁，请过一会儿再问。" : "这次没有回答成功，请再发一次。";
+      log("agent_error", { code: e && e.code, message: e && e.message });
+    }
+  } finally {
+    setBusy(false);
+    CUR = null;
+    scrollChat();
+  }
+}
+async function askLLM(text) {
+  const content = `【界面动态】\n${recentUi() || "（无）"}\n【顾客说】${text}`;
+  S.turns.push({ role: "user", content });
+  S.ctl = new AbortController();
+  const tools = TOOLS();
+  const defs = tools.map(t => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.inputSchema } }));
+  const msgs = [{ role: "system", content: RULES }, ...S.turns.slice(-12)];
+  for (let round = 0; round < 5; round++) {
+    const r = await fetch(WORKER_URL + "/chat", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ messages: msgs, tools: defs }), signal: S.ctl.signal });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw { code: r.status === 429 ? "rate_limited" : "upstream_error", message: (data.error && (data.error.message || data.error)) || data.message || "HTTP " + r.status };
+    const msg = data.choices && data.choices[0] && data.choices[0].message;
+    if (!msg) throw { code: "upstream_error", message: "empty response" };
+    if (msg.tool_calls && msg.tool_calls.length) {
+      msgs.push({ role: "assistant", content: msg.content || "", tool_calls: msg.tool_calls });
+      for (const tc of msg.tool_calls) {
+        let out;
+        try {
+          const tool = tools.find(t => t.name === tc.function.name);
+          if (!tool) throw new Error("没有这个工具");
+          out = await tool.execute(JSON.parse(tc.function.arguments || "{}"));
+        } catch (err) { out = "Error: " + (err.message || err); }
+        msgs.push({ role: "tool", tool_call_id: tc.id, content: typeof out === "string" ? out : JSON.stringify(out) });
+      }
+      continue;
+    }
+    const reply = (msg.content || "").replace(/<think>[\s\S]*?<\/think>/g, "").trim() || "（助手没有给出文字回复）";
+    S.turns.push({ role: "assistant", content: reply });
+    return reply;
+  }
+  throw { code: "upstream_error", message: "too many tool rounds" };
+}
+
+/* local fallback: same tools, keyword parsing */
+function scriptReply(text) {
+  const ids = (text.toUpperCase().match(/P\d{2}/g) || []).filter(id => byId[id]);
+  if (/比较|对比/.test(text) && ids.length >= 2) { toolCompare(ids); return `${ids.join("、")} 的参数已经并排列出来了。你最看重哪一项？`; }
+  if (/最轻/.test(text)) {
+    const top = [...CATALOG].sort((a, b) => a.wt - b.wt).slice(0, 5);
+    logTool("search_products", { sort: "weight_asc", n: top.length });
+    toolShow(top.map(p => p.id));
+    return `按重量从轻到重，最轻的 5 款在下面，最轻的是 ${top[0].name}（${top[0].wt.toFixed(2)}kg）。你还有别的要求吗？`;
+  }
+  const c = {};
+  let m;
+  if ((m = text.match(/(\d{3,4})\s*(?:元|块)?\s*(?:以内|以下|之内)|预算\s*(\d{3,4})/))) c.max_price = +(m[1] || m[2]);
+  if ((m = text.match(/(\d{2})\s*[lL升]/))) c.min_capacity = +m[1];
+  if ((m = text.match(/(\d(?:\.\d+)?)\s*(?:kg|公斤|千克)/i))) c.max_weight = +m[1];
+  else if (/轻/.test(text)) c.max_weight = 1.0;
+  if (/防水|防雨/.test(text)) c.waterproof = true;
+  if ((m = text.match(/(\d{2})\s*(?:寸|英寸)/))) c.min_laptop = +m[1];
+  else if (/电脑|笔记本/.test(text)) c.min_laptop = 14;
+  if (/腰带/.test(text)) c.hip_belt = true;
+  if (/通勤/.test(text) && !/徒步/.test(text)) c.style = "commute";
+  if (/徒步/.test(text) && !/通勤/.test(text)) c.style = "hike";
+  if (Object.keys(c).length) {
+    const r = toolSearch(c);
+    if (!r.count) return "按你说的条件，店里没有同时满足的款。要不要放宽其中一条？";
+    toolShow(r.products.map(p => p.id));
+    return `按你说的条件，有 ${r.count} 款符合，${r.count > 8 ? "先把前 8 款放在下面" : "卡片在下面"}。可以点开看详情，也可以让我比较其中几款，比如“比较 P02 和 P10”。`;
+  }
+  if (ids.length === 1) { toolShow(ids); return `这是 ${ids[0]}。点开卡片能看到完整参数，想选就按「选这款」。`; }
+  return "你可以告诉我预算、容量、重量、要不要防雨、要放多大的电脑，我按这些条件帮你找。也可以让我比较几款，比如“比较 P02 和 P10”。";
+}
+function setMode(mode, label) {
+  AGENT.mode = mode;
+  $("mode").textContent = label;
+  $("mode").classList.toggle("live", mode === "llm");
+  $("r-mode").textContent = mode === "llm" ? `硅基流动 ${AGENT.model}（经 Worker，页面工具 4 个）` : label;
+}
+async function connect() {
+  setMode("script", "连接中…");
+  if (!WORKER_URL) return setMode("script", "本地脚本（未配置 AI 服务）");
+  try {
+    const r = await fetch(WORKER_URL + "/health");
+    const data = await r.json();
+    if (!r.ok || !data.ok) throw new Error(data.error || "HTTP " + r.status);
+    AGENT.model = data.model;
+    setMode("llm", "AI 助手已连接");
+  } catch (e) { setMode("script", "本地脚本（AI 服务连不上）"); }
+}
+
+/* ======================= layout & boot ======================= */
+const CHIPS = ["预算 600 以内", "要防雨，能放 14 寸电脑", "哪款最轻？", "徒步和通勤都要兼顾，帮我缩小范围"];
+function setLayout(l, from) {
+  CONFIG.layout = l;
+  $("btn-layout-a").setAttribute("aria-pressed", String(l === "a"));
+  $("btn-layout-b").setAttribute("aria-pressed", String(l === "b"));
+  $("shop").className = "wrap shop layout-" + l;
+  $("store").hidden = l !== "b";
+  $("search-form").hidden = l !== "b";
+  $("chat-input").placeholder = l === "b" ? "问问助手，例如：要能放电脑、500 元以内" : "告诉助手你想要什么样的背包";
+  if (l === "b") renderStore();
+  if (from) log("layout_set", { to: l, from });
+}
+function greet() {
+  CUR = newAgentMsg();
+  CUR.bubble.classList.remove("thinking");
+  const t = CONFIG.layout === "b"
+    ? "你好，我是购物助手。左边是全店 24 款背包，你可以自己逛，也可以告诉我预算、用途和必须满足的条件，我帮你找出来。"
+    : "你好，我是购物助手。本店有 24 款背包。告诉我你的预算、用途和必须满足的条件，我帮你找出来。";
+  CUR.bubble.textContent = t;
+  log("chat_agent", { text: t, mode: "greeting" });
+  CUR = null;
+}
+function boot() {
+  if (S && S.ctl) S.ctl.abort();
+  S = fresh();
+  $("rlog").replaceChildren();
+  $("msgs").replaceChildren();
+  $("cart-n").textContent = "0";
+  $("search-input").value = "";
+  $("sort").value = "default";
+  $("reason").value = "";
+  $("survey-msg").textContent = "";
+  renderSurvey();
+  renderDock();
+  setLayout(CONFIG.layout);
+  log("session_start", { layout: CONFIG.layout, gu_labels: CONFIG.gu, catalog_size: CATALOG.length, agent: AGENT.mode });
+  show("intro");
+}
+
+$("btn-start").onclick = () => { show("shop"); greet(); $("chat-input").focus(); };
+$("search-form").onsubmit = e => { e.preventDefault(); S.query = $("search-input").value.trim(); S.page = 0; log("store_search", { q: S.query, n: storeItems().length }); renderStore(); };
+$("sort").onchange = e => { S.sort = e.target.value; S.page = 0; log("store_sort", { sort: S.sort }); renderStore(); };
+$("btn-prev").onclick = () => { S.page--; log("store_page", { to: S.page + 1 }); renderStore(); window.scrollTo(0, 0); };
+$("btn-next").onclick = () => { S.page++; log("store_page", { to: S.page + 1 }); renderStore(); window.scrollTo(0, 0); };
+$("btn-cart").onclick = openCart;
+$("btn-dock-open").onclick = () => { if (S.compare.length < 2) { log("compare_open_blocked", { n: S.compare.length }); $("btn-dock-open").textContent = "至少选两款"; setTimeout(() => $("btn-dock-open").textContent = "开始对比", 1500); return; } openCompare(); };
+$("btn-dock-clear").onclick = () => { log("compare_clear", { ids: [...S.compare] }); S.compare = []; renderDock(); };
+$("btn-modal-close").onclick = closeModal;
+$("overlay").addEventListener("click", e => { if (e.target === $("overlay")) closeModal(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("overlay").hidden) closeModal(); });
+$("chat-form").onsubmit = e => { e.preventDefault(); const v = $("chat-input").value; $("chat-input").value = ""; send(v); };
+$("btn-stop").onclick = () => { if (S.ctl) S.ctl.abort(); };
+$("chips").replaceChildren(...CHIPS.map(c => { const b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.textContent = c;
+  b.onclick = () => { if (S.busy) return; log("chip_click", { text: c }); send(c); }; return b; }));
+$("btn-to-survey").onclick = () => show("survey");
+$("survey-form").onsubmit = submitSurvey;
+$("btn-again").onclick = boot;
+$("btn-rpanel").onclick = () => { const h = !$("rpanel").hidden; $("rpanel").hidden = h; log("researcher_panel", { open: !h }); };
+$("btn-rpanel-close").onclick = () => { $("rpanel").hidden = true; };
+$("btn-layout-a").onclick = () => setLayout("a", "researcher");
+$("btn-layout-b").onclick = () => setLayout("b", "researcher");
+$("chk-gu").onchange = e => { CONFIG.gu = e.target.checked; log("config_gu", { on: CONFIG.gu }); };
+$("btn-restart").onclick = boot;
+function copyJson(btn) {
+  const text = JSON.stringify({ condition: { ...CONFIG, agent: AGENT.mode }, events: S.events }, null, 2);
+  const done = ok => { const o = btn.textContent; btn.textContent = ok ? "已复制" : "复制失败，请手动选中"; setTimeout(() => btn.textContent = o, 1500); };
+  try { navigator.clipboard.writeText(text).then(() => done(true), () => done(false)); } catch { done(false); }
+}
+$("btn-copy").onclick = () => copyJson($("btn-copy"));
+$("btn-copy-done").onclick = () => copyJson($("btn-copy-done"));
+window.__proto = { get events() { return S.events; }, get state() { return S; }, CONFIG, AGENT };
+
+boot();
+connect();
+</script>
+</body>
+</html>

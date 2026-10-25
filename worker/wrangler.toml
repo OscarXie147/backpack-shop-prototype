@@ -1,0 +1,10 @@
+name = "backpack-shop-proxy"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+
+[vars]
+# Must be a model marked both 免费 and Tools in the SiliconFlow console model list.
+MODEL = "deepseek-ai/DeepSeek-V4-Flash"
+ALLOWED_ORIGINS = "https://oscarxie147.github.io,http://127.0.0.1:8765"
+
+# SF_KEY is a secret: set it with `npx wrangler secret put SF_KEY`, never in this file.
