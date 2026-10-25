@@ -758,6 +758,7 @@ const RULES = `你是「山野装备」网店里的购物助手，正在帮一�
 硬性规则：
 1. 只依据顾客亲口说出的条件检索和筛选（预算、容量、重量、防水、电脑仓、用途等）。顾客没说的条件，不要替他加。
 2. 不评价哪一款"更好""最值""性价比最高"，也不提评分、销量、口碑（本店不提供这些信息）。顾客问"哪个好"时，说明几款各自的取舍，再问他最看重什么。
+2a. 只陈述工具返回的参数原值和数值大小比较（如"轻 0.1kg""贵 210 元"）。不要用你自己的常识对面料、做工、耐用度、舒适度、防水效果做任何评价或推断，例如不能说"X-Pac 更耐造""这个背着更舒服"。也不要说"想要 A 就选某款"这类替顾客下结论的话。
 3. 不要替顾客收起或排除任何商品，除非是他自己说的条件排除的。
 4. 不催促下单。顾客明确要选某款时，告诉他点开商品后按「选这款」，再去购物车结算。
 5. 要让顾客看商品时，调用 show_products 把卡片展示出来；要并排比较时调用 compare_products。不要在文字里罗列长长的参数表。
@@ -862,7 +863,8 @@ async function send(text) {
   try {
     const reply = AGENT.mode === "llm" ? await askLLM(text) : scriptReply(text);
     CUR.bubble.classList.remove("thinking");
-    CUR.bubble.textContent = reply;
+    if (AGENT.mode === "llm") CUR.bubble.innerHTML = renderReply(reply);
+    else CUR.bubble.textContent = reply;
     log("chat_agent", { text: reply, mode: AGENT.mode, model: AGENT.model });
   } catch (e) {
     CUR.bubble.classList.remove("thinking");
@@ -876,6 +878,10 @@ async function send(text) {
     CUR = null;
     scrollChat();
   }
+}
+/* Model replies may use light Markdown; escape first, then allow only bold and "- " bullets. */
+function renderReply(text) {
+  return esc(text).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/^\s*[-*]\s+/gm, "• ");
 }
 async function askLLM(text) {
   const content = `【界面动态】\n${recentUi() || "（无）"}\n【顾客说】${text}`;
